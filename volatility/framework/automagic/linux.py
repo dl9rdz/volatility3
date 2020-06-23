@@ -30,7 +30,7 @@ class LinuxSymbolFinder(symbol_finder.SymbolFinder):
     symbol_class = "volatility.framework.symbols.linux.LinuxKernelIntermedSymbols"
 
 
-class LintelStacker(interfaces.automagic.StackerLayerInterface):
+class LinuxIntelStacker(interfaces.automagic.StackerLayerInterface):
     stack_order = 45
 
     @classmethod

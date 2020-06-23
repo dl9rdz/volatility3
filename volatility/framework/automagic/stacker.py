@@ -13,7 +13,7 @@ once a layer successfully stacks on top of the existing layers, it is removed fr
 import logging
 import sys
 import traceback
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Type
 
 from volatility import framework
 from volatility.framework import interfaces, constants
@@ -119,12 +119,27 @@ class TranslationLayerStacker(interfaces.automagic.AutomagicInterface):
             return list(unsatisfied)
 
         # Search for suitable requirements
-        self.stack(context, config_path, requirement, progress_callback)
+        stack_set = self.create_stackers_list()
+        self.stack(context, config_path, requirement, stack_set, progress_callback)
 
         return None
 
+    def create_stackers_list(self):
+        """Creates the list of stackers to use based on the config option"""
+        stack_set = sorted(framework.class_subclasses(interfaces.automagic.StackerLayerInterface),
+                           key = lambda x: x.stack_order)
+        stacker_list = self.config.get('stackers', [])
+        if len(stacker_list):
+            result = []
+            for stacker in stack_set:
+                if stacker.__name__ in stacker_list:
+                    result.append(stacker)
+            stack_set = result
+        return stack_set
+
     def stack(self, context: interfaces.context.ContextInterface, config_path: str,
               requirement: interfaces.configuration.RequirementInterface,
+              stack_set: List[Type[interfaces.automagic.StackerLayerInterface]],
               progress_callback: constants.ProgressCallback) -> None:
         """Stacks the various layers and attaches these to a specific
         requirement.
@@ -133,6 +148,7 @@ class TranslationLayerStacker(interfaces.automagic.AutomagicInterface):
             context: Context on which to operate
             config_path: Configuration path under which to store stacking data
             requirement: Requirement that should have layers stacked on it
+            stack_set: A list of StackerLayerInterface objects in the order they should be stacked
             progress_callback: Function to provide callback progress
         """
         # If we're cached, find Now we need to find where to apply the stack configuration
@@ -146,14 +162,21 @@ class TranslationLayerStacker(interfaces.automagic.AutomagicInterface):
                 return
             self._cached = None
 
+        if not len(stack_set):
+            stack_set = sorted(framework.class_subclasses(interfaces.automagic.StackerLayerInterface),
+                               key = lambda x: x.stack_order)
+
+        for stacker in stack_set:
+            if not issubclass(stacker, interfaces.automagic.StackerLayerInterface):
+                raise TypeError("Stacker {} is not a descendent of StackerLayerInterface".format(stacker.__name__))
+
         new_context = context.clone()
         current_layer_name = self.config.get('initial_layer', None)
 
         # Repeatedly apply "determine what this is" code and build as much up as possible
         stacked = True
         stacked_layers = [current_layer_name]
-        stack_set = sorted(framework.class_subclasses(interfaces.automagic.StackerLayerInterface),
-                           key = lambda x: x.stack_order)
+
         while stacked:
             stacked = False
             new_layer = None
@@ -235,7 +258,39 @@ class TranslationLayerStacker(interfaces.automagic.AutomagicInterface):
     @classmethod
     def get_requirements(cls) -> List[interfaces.configuration.RequirementInterface]:
         return [
-            requirements.StringRequirement("initial_layer",
+            requirements.StringRequirement(name = "initial_layer",
                                            description = "Specifies the name of a layer on which to stack",
-                                           optional = True)
+                                           optional = True),
+            requirements.ListRequirement(name = "stackers", description = "List of stackers", optional = True)
         ]
+
+
+def choose_stackers(plugin):
+    """Chooses the available stackers based on the plugin"""
+    plugin_module_components = plugin.__module__.split('.')
+    oses = ['windows', 'linux', 'mac']
+
+    operating_system = 'unknown'
+    lowest_index = len(plugin_module_components)
+
+    for os in oses:
+        try:
+            if plugin_module_components.index(os) < lowest_index:
+                lowest_index = plugin_module_components.index(os)
+                operating_system = os
+        except ValueError:
+            # The value wasn't found, try the next one
+            pass
+
+    result = []
+    for stacker in sorted(framework.class_subclasses(interfaces.automagic.StackerLayerInterface),
+                          key = lambda x: x.stack_order):
+        stacker_name = stacker.__name__.lower()
+        append = True
+        if 'intel' in stacker_name:
+            if operating_system in oses:
+                if not stacker_name.startswith(operating_system):
+                    append = False
+        if append:
+            result.append(stacker.__name__)
+    return result

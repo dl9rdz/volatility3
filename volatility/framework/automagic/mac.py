@@ -30,7 +30,7 @@ class MacSymbolFinder(symbol_finder.SymbolFinder):
     symbol_class = "volatility.framework.symbols.mac.MacKernelIntermedSymbols"
 
 
-class MacintelStacker(interfaces.automagic.StackerLayerInterface):
+class MacIntelStacker(interfaces.automagic.StackerLayerInterface):
     stack_order = 45
 
     @classmethod
@@ -64,7 +64,7 @@ class MacintelStacker(interfaces.automagic.StackerLayerInterface):
             symbol_files = mac_banners.get(banner, None)
             if symbol_files:
                 isf_path = symbol_files[0]
-                table_name = context.symbol_space.free_table_name('MacintelStacker')
+                table_name = context.symbol_space.free_table_name('MacIntelStacker')
                 table = mac.MacKernelIntermedSymbols(context = context,
                                                      config_path = join('temporary', table_name),
                                                      name = table_name,
@@ -153,7 +153,7 @@ class MacUtilities(object):
         end_addr = end_addr & mask
 
         return [("__kernel__", start_addr, end_addr)] + \
-                    MacUtilities.mask_mods_list(context, layer_name, mods_list)
+               MacUtilities.mask_mods_list(context, layer_name, mods_list)
 
     @classmethod
     def lookup_module_address(cls, context: interfaces.context.ContextInterface, handlers: Iterator[Any],
@@ -169,7 +169,7 @@ class MacUtilities(object):
 
                     if len(symbols) > 0:
                         symbol_name = str(symbols[0].split(constants.BANG)[1]) if constants.BANG in symbols[0] else \
-                                       str(symbols[0])
+                            str(symbols[0])
 
                 break
 
